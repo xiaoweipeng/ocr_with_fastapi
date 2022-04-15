@@ -4,6 +4,7 @@
 支持传入图片和pdf,图片可以传入url或者base64编码,pdf可以传入url
 
 http://ip/ 会重定向至 http://ip/docs
+
 http://ip/predict/ocr 只接收POST请求,格式如下:
 ```json{
   "data": {
