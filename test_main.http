@@ -1,0 +1,24 @@
+# Test your FastAPI endpoints
+
+GET http://127.0.0.1:8002/
+Accept: application/json
+
+###
+
+// @no-log
+POST http://127.0.0.1:8002/predict/ocr
+Content-Type: application/json
+
+{
+  "data": {
+    "paths": [
+    "http://127.0.0.1:8000/1.jpg",
+      "https://img-blog.csdnimg.cn/260a6a5e65b74fc498600c040e957bdf.jpg"
+  ],
+    "images": [
+      ""
+    ]
+  },
+  "type": "image"
+}
+
