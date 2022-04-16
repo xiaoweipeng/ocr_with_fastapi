@@ -94,7 +94,7 @@ class OCRsystem():
                     continue
 
             pixs = [page.get_pixmap(dpi=300) for page in doc]
-            images = [np.frombuffer(buffer=pix.samples, dtype=np.uint8).reshape((pix.height, pix.width, 3)) for pix in
+            images = [np.frombuffer(buffer=pix.samples_mv, dtype=np.uint8).reshape((pix.height, pix.width, 3)) for pix in
                       pixs]
             result = [self.model.ocr(image, cls=True) for image in images]
             temp = [''.join([i[1][0] for i in result])]
