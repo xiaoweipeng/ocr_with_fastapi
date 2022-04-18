@@ -59,7 +59,7 @@ class OCRsystem():
         if len(paths) == 0:
             return {'code': 200, 'message': "失败", 'results': "图片路径为空"}
         images = self.read_images_path(paths)
-        results,elapse = self.do_ocr(images)
+        results, elapse = self.do_ocr(images)
         return {'code': 200, 'message': "成功", 'results': results, 'elapse': elapse}
 
     def ocr_images(self, images: List):
@@ -94,11 +94,11 @@ class OCRsystem():
                     continue
 
             pixs = [page.get_pixmap(dpi=300) for page in doc]
-            images = [np.frombuffer(buffer=pix.samples_mv, dtype=np.uint8).reshape((pix.height, pix.width, 3)) for pix in
-                      pixs]
+            images = [np.frombuffer(buffer=pix.samples_mv, dtype=np.uint8).
+                          reshape((pix.height, pix.width, 3))
+                      for pix in pixs]
             result = [self.model.ocr(image, cls=True) for image in images]
-            temp = [''.join([i[1][0] for i in result])]
-            results.append(temp)
+            results.append([''.join([i[1][0] for i in res]) for res in result])
 
         elapse = time.time() - starttime
         return {'code': 200, 'message': "成功", 'results': results, 'elapse': elapse}
@@ -110,6 +110,7 @@ ocr = OCRsystem()
 class Data(BaseModel):
     paths: Optional[List] = None
     images: Optional[List] = None
+
 
 class Func(BaseModel):
     type: Optional[str] = None
