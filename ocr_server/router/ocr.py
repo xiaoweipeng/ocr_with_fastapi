@@ -1,11 +1,9 @@
 import os
 import time
-import urllib.request as urllib
-from typing import List
-from typing import Optional
+from typing import Optional,List
 import fitz
+import requests
 from PIL import Image
-import cv2
 import numpy as np
 from fastapi import APIRouter, Body
 from paddleocr.tools.infer.utility import base64_to_cv2
@@ -34,12 +32,9 @@ class OCRsystem():
         images = []
         for img_path_url in paths:
             try:
-                resp = urllib.urlopen(img_path_url)
+                image = np.asarray(Image.open(requests.get(img_path_url,stream=True).raw))
             except Exception as e:
-                images.append(None)
-                continue
-            image = np.asarray(bytearray(resp.read()), dtype=np.uint8)
-            image = cv2.imdecode(image, cv2.IMREAD_COLOR)
+                image = None
             images.append(image)
         return images
 
@@ -74,11 +69,9 @@ class OCRsystem():
         starttime = time.time()
         for path in pdf_path:
             if path.startswith('http'):
-                if os.path.exists('./temp/temp.pdf'):
-                    os.remove('./temp/temp.pdf')  # 删除临时文件
                 try:
-                    urllib.urlretrieve(path, './temp/temp.pdf')
-                    doc = fitz.open('./temp/temp.pdf')
+                    resp = requests.get(path)
+                    doc = fitz.Document(stream=resp.content, filetype='pdf')
                 except Exception as e:
                     results.append([{'path': path, 'msg': '文件下载失败'}])
                     continue
@@ -140,9 +133,7 @@ async def predict_ocr(data: Data = Body(None, description="传入 路径(paths) 
             return ocr.ocr_paths(data.paths)
         elif data.images:
             return ocr.ocr_images(data.images)
-        else:
-            return {'code': 404, 'message': "data数据缺失"}
     if type == 'pdf':
         return ocr.ocr_pdf(data.paths)
         # raise HTTPException(status_code=404, detail={'code': 404, 'message': "POST数据缺失"})
-    return data
+    return {'code': 404, 'message': "data数据缺失"}
