@@ -1,16 +1,14 @@
-from typing import List, Dict
-from typing import Optional
+from typing import Dict
 
 import uvicorn
-from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import JSONResponse
-from pydantic import BaseModel
+from fastapi import FastAPI
 from starlette.responses import RedirectResponse
+
+from dependencies import Rotator
 # import sys
 # sys.path.append('../')
 from ocr_server.router import ocr
 from ocr_server.router.ocr import logger
-
 
 app = FastAPI(
         title="OCR Server",
@@ -38,7 +36,13 @@ async def test(data:Dict):
 
 @app.on_event("startup")
 async def startup_event():
-    logger.add("log/file_{time}.log",rotation="1 day")
+    rotator = Rotator("10 MB", "00:00")
+    logger.add("logs/file_{time}.log",rotation=rotator.should_rotate,diagnose=False,catch=False)
+    logger.success("startup")
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    logger.success("shutdown")
 
 if __name__ == "__main__":
     # logger.debug("That's it, beautiful and simple logging!")

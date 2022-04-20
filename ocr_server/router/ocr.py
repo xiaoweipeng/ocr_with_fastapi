@@ -1,17 +1,20 @@
 import os
 import time
-from typing import Optional,List
+import warnings
+from typing import Optional, List
+
 import fitz
+import numpy as np
 import requests
 from PIL import Image
-import numpy as np
 from fastapi import APIRouter, Body
-from paddleocr.tools.infer.utility import base64_to_cv2
-from pydantic import BaseModel
 from loguru import logger
 from paddleocr import PaddleOCR
-import warnings
-warnings.filterwarnings("ignore",category=DeprecationWarning)
+from paddleocr.tools.infer.utility import base64_to_cv2
+from pydantic import BaseModel
+
+warnings.filterwarnings("ignore", category=DeprecationWarning)
+
 
 class OCRsystem():
     def __init__(self):
@@ -25,77 +28,103 @@ class OCRsystem():
                                show_log=False)
         # self.model=PaddleOCR(use_angle_cls=True, lang='ch')
 
-    def read_images_path(self, paths):
-        images = []
-        for img_path_url in paths:
-            try:
-                image = np.asarray(Image.open(requests.get(img_path_url,stream=True).raw))
-            except Exception as e:
-                image = None
-            images.append(image)
-        return images
-
-    def do_ocr(self, images):
-        results = []
-        starttime = time.time()
-        for image in images:
-            if image is None:
-                results.append('图片不存在')
-                continue
-            result = self.model.ocr(image, cls=True)
-            results.append(''.join([i[1][0] for i in result]))
-        elapse = time.time() - starttime
-        return results, elapse
 
     def ocr_paths(self, paths: List):
         if len(paths) == 0:
             return {'code': 200, 'message': "失败", 'results': "图片路径为空"}
-        images = self.read_images_path(paths)
-        results, elapse = self.do_ocr(images)
-        return {'code': 200, 'message': "成功", 'results': results, 'elapse': elapse}
+        st = time.time()
+        results = []
+        for img_path_url in paths:
+            try:
+                image = np.asarray(Image.open(requests.get(img_path_url, stream=True).raw))
+                starttime = time.time()
+                result = self.model.ocr(image)
+                elapse = time.time() - starttime
+                result2 = {'msg': ''.join([i[1][0] for i in result]),
+                           'path': img_path_url,
+                           'elapse': elapse,
+                           'hash': str(hash(image.data.tobytes()))
+                           }
+                results.append(result2)
+                logger.info(result2)
+            except Exception as e:
+                result2 = {'msg': '图片不存在',
+                                'path': img_path_url,
+                                'elapse': 0}
+                results.append(result2)
+                temp = result2.copy()
+                temp['error'] =str(e)
+                logger.error(temp)
+        return {'code': 200, 'message': "成功", 'results': results, 'elapse': time.time() - st}
 
-    def ocr_images(self, images: List):
+    def ocr_base64(self, images: List):
         if len(images) == 0:
             return {'code': 200, 'message': "失败", 'results': "图片列表为空"}
-        images = [base64_to_cv2(image) for image in images]
-        return self.do_ocr(images)
-        # return {'code': 200, 'message': "成功", 'results': results, 'elapse': elapse}
+        st = time.time()
+        results =[]
+        for img in images:
+            try:
+                image = base64_to_cv2(img)
+                starttime = time.time()
+                result = self.model.ocr(image)
+                elapse = time.time() - starttime
+                result2 = {'msg': ''.join([i[1][0] for i in result]),
+                           'elapse': elapse,
+                           'hash': str(hash(image.data.tobytes()))
+                           }
+                results.append(result2)
+                logger.info(result2)
+            except Exception as e:
+                result2 = {'msg': '图片不存在',
+                           'elapse': 0}
+                results.append(result2)
+                temp = result2.copy()
+                temp['error'] = str(e)
+                temp['img'] = img
+                logger.error(temp)
+        return {'code': 200, 'message': "成功", 'results': results, 'elapse': time.time() - st}
+
 
     def ocr_pdf(self, pdf_path: List[str]):
         results = []
-        starttime = time.time()
+        st = time.time()
 
         for path in pdf_path:
+            starttime = time.time()
             if path.startswith('http'):
                 try:
                     resp = requests.get(path)
                     doc = fitz.Document(stream=resp.content, filetype='pdf')
                 except Exception as e:
-                    doc= {'path': path, 'msg': '文件下载失败'}
+                    doc = {'msg': '文件下载失败','path': path}
             else:
                 if os.path.isfile(path):
                     try:
                         doc = fitz.open(path)
                     except Exception as e:
-                        doc = {'path': path, 'msg': '文件路径错误,文件不存在'}
+                        doc = {'msg': '文件路径错误,文件不存在','path': path}
                 else:
-                    doc = {'path': path, 'msg': '文件路径错误,文件不存在'}
+                    doc = {'msg': '文件路径错误,文件不存在','path': path}
 
             if isinstance(doc, dict):
                 results.append(doc)
+                logger.error(doc)
                 continue
-            result = []
+            result_pages = []
             for page in doc:
                 pix = page.get_pixmap(dpi=300)
                 image = np.frombuffer(buffer=pix.samples_mv, dtype=np.uint8).reshape((pix.height, pix.width, -1))
-                res = self.model.ocr(image)
-                result.append(res)
-            # result = [self.model.ocr(image, cls=True) for image in images]
-            results.append([''.join([i[1][0] for i in res]) for res in result])
+                result = self.model.ocr(image)
+                result_pages.append(result)
 
-        elapse = time.time() - starttime
-        return {'code': 200, 'message': "成功", 'results': results, 'elapse': elapse}
-
+            result2 = {'msg':[''.join([i[1][0] for i in res]) for res in result_pages],
+                       'path': path,
+                       'elapse': time.time() - starttime,
+                       'hash': str(hash(doc))
+                       }
+            results.append(result2)
+            logger.info(result2)
+        return {'code': 200, 'message': "成功", 'results': results, 'elapse': time.time() - st}
 
 
 class Data(BaseModel):
@@ -114,17 +143,12 @@ router = APIRouter()
 async def predict_ocr(data: Data = Body(None, description="传入 路径(paths) 或 base64图片(images)"),
                       type: str = Body(None)
                       ):
-    # print(data.paths)
-    # print(data.images)
-    # print(type)
-    print(data)
-    print(type)
+    logger.info(str(data)+' type:'+type)
     ocr = OCRsystem()
     if type == 'image' or type is None:
-        if data.paths:
-            return ocr.ocr_paths(data.paths)
-        elif data.images:
-            return ocr.ocr_images(data.images)
+        return ocr.ocr_paths(data.paths)
+    if type=='base64':
+        return ocr.ocr_base64(data.images)
     if type == 'pdf':
         return ocr.ocr_pdf(data.paths)
         # raise HTTPException(status_code=404, detail={'code': 404, 'message': "POST数据缺失"})
