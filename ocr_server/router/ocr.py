@@ -84,13 +84,10 @@ class OCRsystem():
             if isinstance(doc, dict):
                 results.append(doc)
                 continue
-
-            pixs = [page.get_pixmap(dpi=300) for page in doc]
-            images = [np.frombuffer(buffer=pix.samples_mv, dtype=np.uint8).
-                          reshape((pix.height, pix.width, 3))
-                      for pix in pixs]
             result = []
-            for image in images:
+            for page in doc:
+                pix = page.get_pixmap(dpi=300)
+                image = np.frombuffer(buffer=pix.samples_mv, dtype=np.uint8).reshape((pix.height, pix.width, -1))
                 res = self.model.ocr(image)
                 result.append(res)
             # result = [self.model.ocr(image, cls=True) for image in images]
