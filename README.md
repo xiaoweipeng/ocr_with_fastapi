@@ -10,20 +10,24 @@ http://ip/predict/ocr 只接收POST请求,格式如下:
   "data": {
     "paths": [
     "http://127.0.0.1:8000/1.jpg",
-    "http://127.0.0.1:8000/11.jpg",
-  ],
+    "http://127.0.0.1:8000/11.jpg"
+    ],
     "images": [
       "base64code",
       "base64code"
-    ]
+      ]
   },
-  "type": "image/pdf"
+  "type": "image/pdf/base64"
 }
 ```
 
-如果type为image,优先读取paths内数据,若为空,才读取images内数据.
+如果type为image,读取paths内数据,
 
-如果type为pdf,只处理paths内数据,会将pdf下载到本地后转为图片再进行ocr
+如果type为base64,读取images内数据.
+
+如果type为pdf,只处理paths内数据,会将pdf读取到内存后转为图片再进行ocr
+
+因为图片转为ndarray会占用大量内存,使用for循环逐个推理,不使用列表推导式.因为paddleocr使用的cpu和mkldnn,每此预测会吃满CPU,此方法不进行异步(异步会互相抢占CPU,导致运算更慢),async只是防止paddle并发报错,结果是其他接口也会无反应,若想多线程,可以去掉async.
 
 使用paddleocr对图片进行处理,使用了ppocr_server和ppocr_mobile的推理库以及ppocr的字典,返回一张图所有字符串连接起来的结果,没有断句
 
