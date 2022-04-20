@@ -4,9 +4,7 @@ import uvicorn
 from fastapi import FastAPI
 from starlette.responses import RedirectResponse
 
-from dependencies import Rotator
-# import sys
-# sys.path.append('../')
+from ocr_server.dependencies import Rotator
 from ocr_server.router import ocr
 from ocr_server.router.ocr import logger
 
@@ -45,6 +43,5 @@ async def shutdown_event():
     logger.success("shutdown")
 
 if __name__ == "__main__":
-    # logger.debug("That's it, beautiful and simple logging!")
     uvicorn.run(app='main:app', host='0.0.0.0', port=8002, log_config="config/uvicorn_config.json")
 
