@@ -8,16 +8,13 @@ import numpy as np
 from fastapi import APIRouter, Body
 from paddleocr.tools.infer.utility import base64_to_cv2
 from pydantic import BaseModel
-
+from loguru import logger
+from paddleocr import PaddleOCR
+import warnings
+warnings.filterwarnings("ignore",category=DeprecationWarning)
 
 class OCRsystem():
     def __init__(self):
-        from paddleocr import PaddleOCR
-        # self.model = PaddleOCR(det_model_dir='./inference/ch_ppocr_server_v2.0_det_infer',
-        #                   rec_model_dir='./inference/ch_ppocr_server_v2.0_rec_infer',
-        #                   rec_char_dict_path='./inference/ppocr_keys_v1.txt',
-        #                   cls_model_dir='./inference/ch_ppocr_mobile_v2.0_cls_infer',
-        #                   use_angle_cls=True)
         project_path = os.path.abspath(__file__).split("router")[0]
         self.model = PaddleOCR(det_model_dir=os.path.join(project_path, "inference/ch_ppocr_server_v2.0_det_infer"),
                                rec_model_dir=os.path.join(project_path, "inference/ch_ppocr_server_v2.0_rec_infer"),
@@ -67,37 +64,41 @@ class OCRsystem():
     def ocr_pdf(self, pdf_path: List[str]):
         results = []
         starttime = time.time()
+
         for path in pdf_path:
             if path.startswith('http'):
                 try:
                     resp = requests.get(path)
                     doc = fitz.Document(stream=resp.content, filetype='pdf')
                 except Exception as e:
-                    results.append([{'path': path, 'msg': '文件下载失败'}])
-                    continue
+                    doc= {'path': path, 'msg': '文件下载失败'}
             else:
                 if os.path.isfile(path):
                     try:
                         doc = fitz.open(path)
                     except Exception as e:
-                        results.append([{'path': path, 'msg': '文件路径错误,文件不存在'}])
-                        continue
+                        doc = {'path': path, 'msg': '文件路径错误,文件不存在'}
                 else:
-                    results.append([{'path': path, 'msg': '文件路径错误,文件不存在'}])
-                    continue
+                    doc = {'path': path, 'msg': '文件路径错误,文件不存在'}
+
+            if isinstance(doc, dict):
+                results.append(doc)
+                continue
 
             pixs = [page.get_pixmap(dpi=300) for page in doc]
             images = [np.frombuffer(buffer=pix.samples_mv, dtype=np.uint8).
                           reshape((pix.height, pix.width, 3))
                       for pix in pixs]
-            result = [self.model.ocr(image, cls=True) for image in images]
+            result = []
+            for image in images:
+                res = self.model.ocr(image)
+                result.append(res)
+            # result = [self.model.ocr(image, cls=True) for image in images]
             results.append([''.join([i[1][0] for i in res]) for res in result])
 
         elapse = time.time() - starttime
         return {'code': 200, 'message': "成功", 'results': results, 'elapse': elapse}
 
-
-ocr = OCRsystem()
 
 
 class Data(BaseModel):
@@ -112,13 +113,6 @@ class Func(BaseModel):
 router = APIRouter()
 
 
-# @router.on_event("startup")
-# def make_dir():
-#     if not os.path.isdir("./temp"):
-#         os.makedirs("./temp")
-# print("已加载模型")
-
-
 @router.post("/predict/ocr", description="图片识别")
 async def predict_ocr(data: Data = Body(None, description="传入 路径(paths) 或 base64图片(images)"),
                       type: str = Body(None)
@@ -128,6 +122,7 @@ async def predict_ocr(data: Data = Body(None, description="传入 路径(paths) 
     # print(type)
     print(data)
     print(type)
+    ocr = OCRsystem()
     if type == 'image' or type is None:
         if data.paths:
             return ocr.ocr_paths(data.paths)
