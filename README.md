@@ -1,6 +1,15 @@
 # ocr_with_fastapi
 基于fastapi的paddleocr服务
 
+启动命令:
+``` shell
+uvicorn ocr_server.main:app --host 0.0.0.0 --port 8002
+```
+使用gunicorn管理uvicorn时要注意gunicorn有很多默认的参数，比如--workers=4,--timeout=600,--log-level=info等等, 此项目需要设置timeout,如果运算太慢,gunicorn就自动kill进程了.
+```shell
+gunicorn -k uvicorn.workers.UvicornWorker ocr_server.main:app --bind 0.0.0.0:8002 --timeout 3000
+```
+
 支持传入图片和pdf,图片可以传入url或者base64编码,pdf可以传入url
 
 http://ip/ 会重定向至 http://ip/docs
