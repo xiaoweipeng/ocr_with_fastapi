@@ -2,7 +2,6 @@ from typing import Dict
 
 import uvicorn
 from fastapi import FastAPI
-from starlette.responses import RedirectResponse
 
 from ocr_server.dependencies import Rotator
 from ocr_server.router import ocr
@@ -12,20 +11,21 @@ app = FastAPI(
         title="OCR Server",
         description="OCR服务器接口文档",
         version="0.1.0",
-
+        docs_url=None,
+        redoc_url=None,
+        openapi_url=None,
+        swagger_ui_oauth2_redirect_url=None,
 )
 app.include_router(ocr.router)
 
 
 @app.get("/")
 async def root():
-    return RedirectResponse("/docs")
-    # return {"message": "查看/docs以了解接口使用方法"}
+    return {"message": "启动成功"}
 
 @app.get("/test/{name}")
 async def test_name(name:str):
     return name
-    # return {"message": "查看/docs以了解接口使用方法"}
 
 @app.post("/test")
 async def test(data:Dict):
