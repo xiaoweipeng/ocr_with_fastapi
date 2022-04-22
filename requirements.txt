@@ -1,0 +1,7 @@
+fastapi
+pymupdf
+loguru
+paddlepaddle
+paddleocr
+uvicorn[standard]
+gunicorn

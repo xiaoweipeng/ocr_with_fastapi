@@ -7,7 +7,7 @@ import fitz
 import numpy as np
 import requests
 from PIL import Image
-from fastapi import APIRouter, Body
+from fastapi import APIRouter, Body, Request
 from loguru import logger
 from paddleocr import PaddleOCR
 from paddleocr.tools.infer.utility import base64_to_cv2
@@ -27,7 +27,6 @@ class OCRsystem():
                                enable_mkldnn=True,
                                show_log=False)
         # self.model=PaddleOCR(use_angle_cls=True, lang='ch')
-
 
     def ocr_paths(self, paths: List):
         if len(paths) == 0:
@@ -49,11 +48,11 @@ class OCRsystem():
                 logger.info(result2)
             except Exception as e:
                 result2 = {'msg': '图片不存在',
-                                'path': img_path_url,
-                                'elapse': 0}
+                           'path': img_path_url,
+                           'elapse': 0}
                 results.append(result2)
                 temp = result2.copy()
-                temp['error'] =str(e)
+                temp['error'] = str(e)
                 logger.error(temp)
         return {'code': 200, 'message': "成功", 'results': results, 'elapse': time.time() - st}
 
@@ -61,7 +60,7 @@ class OCRsystem():
         if len(images) == 0:
             return {'code': 200, 'message': "失败", 'results': "图片列表为空"}
         st = time.time()
-        results =[]
+        results = []
         for img in images:
             try:
                 image = base64_to_cv2(img)
@@ -84,7 +83,6 @@ class OCRsystem():
                 logger.error(temp)
         return {'code': 200, 'message': "成功", 'results': results, 'elapse': time.time() - st}
 
-
     def ocr_pdf(self, pdf_path: List[str]):
         results = []
         st = time.time()
@@ -96,15 +94,15 @@ class OCRsystem():
                     resp = requests.get(path)
                     doc = fitz.Document(stream=resp.content, filetype='pdf')
                 except Exception as e:
-                    doc = {'msg': '文件下载失败','path': path}
+                    doc = {'msg': '文件下载失败', 'path': path}
             else:
                 if os.path.isfile(path):
                     try:
                         doc = fitz.open(path)
                     except Exception as e:
-                        doc = {'msg': '文件路径错误,文件不存在','path': path}
+                        doc = {'msg': '文件路径错误,文件不存在', 'path': path}
                 else:
-                    doc = {'msg': '文件路径错误,文件不存在','path': path}
+                    doc = {'msg': '文件路径错误,文件不存在', 'path': path}
 
             if isinstance(doc, dict):
                 results.append(doc)
@@ -117,7 +115,7 @@ class OCRsystem():
                 result = self.model.ocr(image)
                 result_pages.append(result)
 
-            result2 = {'msg':[''.join([i[1][0] for i in res]) for res in result_pages],
+            result2 = {'msg': [''.join([i[1][0] for i in res]) for res in result_pages],
                        'path': path,
                        'elapse': time.time() - starttime,
                        'hash': str(hash(doc))
@@ -140,14 +138,15 @@ router = APIRouter()
 
 
 @router.post("/predict/ocr", description="图片识别")
-async def predict_ocr(data: Data = Body(None, description="传入 路径(paths) 或 base64图片(images)"),
-                      type: str = Body(None)
+async def predict_ocr(req: Request,
+                      data: Data = Body(None, description="传入 路径(paths) 或 base64图片(images)"),
+                      type: str = Body(None),
                       ):
-    logger.info(str(data)+' type:'+type)
+    logger.info("ip: "+req.client.host+' port: '+str(req.client.port)+' '+str(data) + ' type:' + type)
     ocr = OCRsystem()
     if type == 'image' or type is None:
         return ocr.ocr_paths(data.paths)
-    if type=='base64':
+    if type == 'base64':
         return ocr.ocr_base64(data.images)
     if type == 'pdf':
         return ocr.ocr_pdf(data.paths)
