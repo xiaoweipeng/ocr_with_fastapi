@@ -35,13 +35,9 @@ class OCRsystem():
         results = []
         for img_path_url in paths:
             try:
-                image = np.asarray(Image.open(requests.get(img_path_url, stream=True).raw))
-
+                image = np.asarray(Image.open(requests.get(img_path_url, stream=True).raw).convert('RGB'))
                 starttime = time.time()
-                if image.shape[2]==4:
-                    result = self.model.ocr(image[:,:,:-1])
-                else:
-                    result = self.model.ocr(image)
+                result = self.model.ocr(image)
                 elapse = time.time() - starttime
                 result2 = {'msg': ''.join([i[1][0] for i in result]),
                            'path': img_path_url,
