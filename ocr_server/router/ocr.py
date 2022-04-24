@@ -144,11 +144,18 @@ async def predict_ocr(req: Request,
                       ):
     logger.info("ip: "+req.client.host+' port: '+str(req.client.port)+' '+str(data) + ' type:' + type)
     ocr = OCRsystem()
-    if type == 'image' or type is None:
-        return ocr.ocr_paths(data.paths)
-    if type == 'base64':
-        return ocr.ocr_base64(data.images)
-    if type == 'pdf':
-        return ocr.ocr_pdf(data.paths)
+    if data is not None:
+        if type == 'image' or type is None:
+            if data.paths is not None:
+                if len(data.paths) > 0:
+                    return ocr.ocr_paths(data.paths)
+        if type == 'base64':
+            if data.images is not None:
+                if len(data.images) > 0:
+                    return ocr.ocr_base64(data.images)
+        if type == 'pdf':
+            if data.paths is not None:
+                if len(data.paths) > 0:
+                    return ocr.ocr_pdf(data.paths)
         # raise HTTPException(status_code=404, detail={'code': 404, 'message': "POST数据缺失"})
-    return {'code': 404, 'message': "data数据缺失"}
+    return {'code': 404, 'message': "data数据缺失",'data':data,'type':type}
