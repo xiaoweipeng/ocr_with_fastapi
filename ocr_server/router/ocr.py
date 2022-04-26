@@ -39,7 +39,7 @@ class OCRsystem():
                 starttime = time.time()
                 result = self.model.ocr(image)
                 elapse = time.time() - starttime
-                result2 = {'msg': ''.join([i[1][0] for i in result]),
+                result2 = {'msg': ' '.join([i[1][0] for i in result]),
                            'path': img_path_url,
                            'elapse': elapse,
                            'hash': str(hash(image.data.tobytes()))
@@ -67,7 +67,7 @@ class OCRsystem():
                 starttime = time.time()
                 result = self.model.ocr(image)
                 elapse = time.time() - starttime
-                result2 = {'msg': ''.join([i[1][0] for i in result]),
+                result2 = {'msg': ' '.join([i[1][0] for i in result]),
                            'elapse': elapse,
                            'hash': str(hash(image.data.tobytes()))
                            }
@@ -130,10 +130,6 @@ class Data(BaseModel):
     images: Optional[List] = None
 
 
-class Func(BaseModel):
-    type: Optional[str] = None
-
-
 router = APIRouter()
 
 
@@ -142,7 +138,7 @@ async def predict_ocr(req: Request,
                       data: Data = Body(None, description="传入 路径(paths) 或 base64图片(images)"),
                       type: str = Body(None),
                       ):
-    logger.info("ip: "+req.client.host+' port: '+str(req.client.port)+' '+str(data) + ' type:' + type)
+    logger.info("ip: " + req.client.host + ' port: ' + str(req.client.port) + ' ' + str(data) + ' type:' + type)
     ocr = OCRsystem()
     if data is not None:
         if type == 'image' or type is None:
@@ -158,4 +154,4 @@ async def predict_ocr(req: Request,
                 if len(data.paths) > 0:
                     return ocr.ocr_pdf(data.paths)
         # raise HTTPException(status_code=404, detail={'code': 404, 'message': "POST数据缺失"})
-    return {'code': 404, 'message': "data数据缺失",'data':data,'type':type}
+    return {'code': 404, 'message': "data数据缺失", 'data': data, 'type': type}

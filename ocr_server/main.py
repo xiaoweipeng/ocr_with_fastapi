@@ -2,10 +2,11 @@ from typing import Dict
 
 import uvicorn
 from fastapi import FastAPI
+from loguru import logger
 
 from ocr_server.dependencies import Rotator
+from ocr_server.router import id
 from ocr_server.router import ocr
-from ocr_server.router.ocr import logger
 
 app = FastAPI(
         title="OCR Server",
@@ -17,7 +18,7 @@ app = FastAPI(
         swagger_ui_oauth2_redirect_url=None,
 )
 app.include_router(ocr.router)
-
+app.include_router(id.router)
 
 @app.get("/")
 async def root():
