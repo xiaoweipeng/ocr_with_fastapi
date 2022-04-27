@@ -26,29 +26,29 @@ class IdCardStraight:
             i.replace(" ", "").translate(str.maketrans("", "", string.punctuation))
             for i in result
         ]
-        self.out = {"Data": {"FrontResult": {}}}
-        self.res = self.out["Data"]["FrontResult"]
+        self.out = {"Data": {"Result": {}}}
+        self.res = self.out["Data"]["Result"]
         self.res["Name"] = ""
         self.res["IDNumber"] = ""
         self.res["Address"] = ""
         self.res["Gender"] = ""
         self.res["Nationality"] = ""
-        self.res['front'] = True
+        self.res["Birth"] = ""
+        self.res['isFront'] = True
 
     def is_front(self):
-        for i in range(len(self.result)):
-            txt = self.result[i]
-            if ("中华人民共和国" in txt or
-                    "居民身份证" in txt or
-                    "签发" in txt or
-                    "机关" in txt or
-                    "有效" in txt or
-                    "期限" in txt
-            ):
-                self.res['front'] = False
-                return False
-
-        self.res['front'] = True
+        for txt in self.result:
+            if len(txt) > 1:
+                if ("中华人民共和国" in txt or
+                        "居民身份证" in txt or
+                        "签发" in txt or
+                        "机关" in txt or
+                        "有效" in txt or
+                        "期限" in txt
+                ):
+                    self.res['isFront'] = False
+                    return False
+        self.res['isFront'] = True
         return True
 
     def birth_no(self):
@@ -57,43 +57,66 @@ class IdCardStraight:
         """
         for i in range(len(self.result)):
             txt = self.result[i]
-
             # 身份证号码
             if "X" in txt or "x" in txt:
-                res = re.findall("\d*[X|x]", txt)
+                res = re.findall("\d{17}[X|x]", txt)
+                res[17] = 'X'
             else:
-                res = re.findall("\d{16,18}", txt)
+                res = re.findall("\d{18}", txt)
 
             if len(res) > 0:
                 if len(res[0]) == 18:
-                    self.res["IDNumber"] = res[0].replace("号码", "")
+                    self.res["IDNumber"] = res[0]
                     self.res["Gender"] = "男" if int(res[0][16]) % 2 else "女"
+                    year = int(res[0][6:10])
+                    month = int(res[0][10:12])
+                    day = int(res[0][12:14])
+                    #     简单判断年月日是否合法
+                    if month >= 13 or month == 0 or day >= 32 or day == 0 or year < 1900 or year > time.localtime(
+                            time.time()).tm_year:
+                        self.out['error'] = '信息读取不全,重新上传照片'
+                    coefficient = [7, 9, 10, 5, 8, 4, 2, 1, 6, 3, 7, 9, 10, 5, 8, 4, 2]
+                    code = [int(i[0]) * int(i[1]) for i in zip(res[0][:17], coefficient)]
+                    check_code = sum(code) % 11
+                    if not ['1', '0', 'X', '9', '8', '7', '6', '5', '4', '3', '2'][check_code] == res[0][17]:
+                        self.out['error'] = '身份证号校验错误,重新上传照片'
+                    self.result[i] = '-'
+                    self.res["Birth"] = f"{year}-{month}-{day}"
                 break
 
     def full_name(self):
         """
-        身份证姓名
+        身份证姓名,不限制名字长度(就一行)
         """
         for i in range(len(self.result)):
             txt = self.result[i]
-            if ("姓名" or "名" in txt) and len(txt) > 2:
-                res = re.findall("名[\u4e00-\u9fa5]{1,4}", txt)
+            if ("姓名" in txt or "名" in txt) and len(txt) > 2:
+                res = re.findall("名[\u4e00-\u9fa5]+", txt)
                 if len(res) > 0:
                     self.res["Name"] = res[0].split("名")[-1]
-                    self.result[i] = "temp"  # 避免身份证姓名对地址造成干扰
+                    self.result[i] = "-"  # 避免身份证姓名对地址造成干扰
                     break
-
-    def sex(self):
-        """
-        性别女民族汉
-        """
-        for i in range(len(self.result)):
-            txt = self.result[i]
-            if "男" in txt:
-                self.res["Gender"] = "男"
-
-            elif "女" in txt:
-                self.res["Gender"] = "女"
+        # 没有匹配的名字,猜名字,可能会有误差,'名'后面的字符串是名字
+        if self.res["Name"] == "":
+            for i in range(len(self.result)):
+                txt = self.result[i]
+                if len(txt) > 1:
+                    if (
+                            "性别" not in txt
+                            and "姓名" not in txt
+                            and "民族" not in txt
+                            and "住址" not in txt
+                            and "出生" not in txt
+                            and "号码" not in txt
+                            and "身份" not in txt
+                    ) or '名' in self.result[i - 1]:
+                        self.res["Name"] = self.result[i]
+                        self.result[i] = '-'
+                        break
+                        # result = re.findall("[\u4e00-\u9fa5]", txt)
+                        # if len(result) > 0:
+                        #     self.res["Name"] = result[0]
+                        #     break
 
     def national(self):
         # 性别女民族汉
@@ -103,6 +126,7 @@ class IdCardStraight:
 
             if len(res) > 0:
                 self.res["Nationality"] = res[0].split("族")[-1]
+                self.result[i] = '-'
                 break
 
     def address(self):
@@ -112,11 +136,10 @@ class IdCardStraight:
         addString = []
         for i in range(len(self.result)):
             txt = self.result[i]
-            txt = txt.replace("号码", "")
-            if "公民" in txt:
-                txt = "temp"
+            # txt = txt.replace("号码", "")
+            # if "公民" in txt:
+            #     txt = "temp"
             # 身份证地址
-
             if (
                     "住址" in txt
                     or "址" in txt
@@ -131,49 +154,27 @@ class IdCardStraight:
                     or "城" in txt
                     or "组" in txt
                     or "号" in txt
+                    or "幢" in txt
+                    or "栋" in txt
             ):
-
                 if "住址" in txt or "省" in txt or "址" in txt:
                     addString.insert(0, txt.split("址")[-1])
                 else:
                     addString.append(txt)
 
-                self.result[i] = "temp"
+                self.result[i] = "-"
 
         if len(addString) > 0:
             self.res["Address"] = "".join(addString)
         else:
             self.res["Address"] = ""
 
-    def predict_name(self):
-        """
-        如果PaddleOCR返回的不是姓名xx连着的，则需要去猜测这个姓名，此处需要改进
-        """
-        if self.res["Name"] == "":
-            for i in range(len(self.result)):
-                txt = self.result[i]
-                if len(txt) > 1 and len(txt) < 5:
-                    if (
-                            "性别" not in txt
-                            and "姓名" not in txt
-                            and "民族" not in txt
-                            and "住址" not in txt
-                            and "出生" not in txt
-                            and "号码" not in txt
-                            and "身份" not in txt
-                    ):
-                        result = re.findall("[\u4e00-\u9fa5]{2,4}", txt)
-                        if len(result) > 0:
-                            self.res["Name"] = result[0]
-                            break
-
     def run(self):
         if self.is_front():
+            self.birth_no()
             self.full_name()
             self.national()
-            self.birth_no()
             self.address()
-            self.predict_name()
             for key, value in self.res.items():
                 if value == "":
                     self.out['error'] = '信息读取不全,重新上传照片'
@@ -218,9 +219,11 @@ class id_OCRsystem():
                 img = img[::-1, ...][:, ::-1]
         # 没有倒置字,继续处理
         result = self.model.ocr(img, det=True, cls=False, rec=True)
-        logger.info(result)
+        logger.info(f'图片{str(hash(img.data.tobytes()))}ocr结果{result}')
         txts = [line[1][0] for line in result]
-        return IdCardStraight(txts).run()
+        result = IdCardStraight(txts).run()
+        logger.info(f'图片{str(hash(img.data.tobytes()))}身份证处理结果{result}')
+        return result
 
     def ocr_paths(self, paths: List):
         if len(paths) == 0:
