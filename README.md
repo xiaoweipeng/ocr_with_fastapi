@@ -14,8 +14,8 @@ sudo bash start.sh
 uvicorn ocr_server.main:app --host 0.0.0.0 --port 8002
 ```
 
-使用gunicorn管理uvicorn时要注意gunicorn有很多默认的参数，比如--workers=4,--timeout=60,--log-level=info等等,
-此项目需要设置timeout,如果运算太慢,gunicorn就自动kill进程了.
+使用gunicorn管理uvicorn时要注意gunicorn有很多默认的参数，比如--workers=4,--timeout=60等等,
+此项目需要设置timeout,如果运算太慢,gunicorn就自动kill进程了. 本身ocr就是CPU密集型服务,多worker会导致互相抢占CPU,还可能paddle报错.
 
 ```shell
 gunicorn -k uvicorn.workers.UvicornWorker ocr_server.main:app --bind 0.0.0.0:8002 --timeout 3000
@@ -25,7 +25,7 @@ gunicorn -k uvicorn.workers.UvicornWorker ocr_server.main:app --bind 0.0.0.0:800
 
 ```shell
 apt install supervisor
-#需要修改gunicorn_supervisor.conf文件内的{VENV}字段为当前项目的python环境路径
+#需要修改gunicorn_supervisor.conf文件内的{PWD_PATH}字段为当前项目路径,{VENV_PATH}字段为当前的python环境路径
 sudo cp gunicorn_supervisor.conf /etc/supervisor/conf.d/
 sudo supervisorctl reread
 sudo supervisorctl update
