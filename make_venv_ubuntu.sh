@@ -1,6 +1,7 @@
 #!/bin/bash
 if ! python3 -V &>/dev/null; then
         echo "python3未安装,请安装python3"
+        echo "执行 apt install -y python3 python3-lib python3-devel gcc gcc-c++"
         exit 1
     else
         echo "python已安装"
@@ -20,6 +21,6 @@ pip install -r requirements.txt
 sed -i "s@PWD_PATH@${PWD}@g" gunicorn_supervisor.conf
 sed -i "s@VENV_PATH@${PWD}/venv@g" gunicorn_supervisor.conf
 
-sudo cp gunicorn_supervisor.conf /etc/supervisor/conf.d/
+sudo cp gunicorn_supervisor.conf /etc/supervisor/conf.d/ #系统不同supervisor文件夹名不同
 sudo supervisorctl reread
 sudo supervisorctl update
