@@ -2,6 +2,6 @@ fastapi[all]
 pymupdf
 loguru
 paddlepaddle==2.2.2
-paddleocr=2.4.0.4
+paddleocr==2.4.0.4
 uvicorn[standard]
 gunicorn
