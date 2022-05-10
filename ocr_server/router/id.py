@@ -232,7 +232,7 @@ class id_OCRsystem():
         results = []
         for img_path_url in paths:
             try:
-                image = np.asarray(Image.open(requests.get(img_path_url, stream=True).raw).convert('RGB'))
+                image = np.asarray(Image.open(requests.get(img_path_url, stream=True, timeout=100).raw).convert('RGB'))
                 starttime = time.time()
                 result = self.do_ocr(image)
                 elapse = time.time() - starttime
@@ -258,6 +258,7 @@ class id_OCRsystem():
                 temp = result2.copy()
                 temp['error'] = str(e)
                 logger.error(temp)
+        logger.info(results)
         return {'code': 200, 'message': "成功", 'results': results, 'elapse': time.time() - st}
 
     def ocr_base64(self, images: List):
@@ -291,6 +292,7 @@ class id_OCRsystem():
                 temp['error'] = str(e)
                 temp['img'] = img
                 logger.error(temp)
+        logger.info(results)
         return {'code': 200, 'message': "成功", 'results': results, 'elapse': time.time() - st}
 
 
@@ -310,9 +312,22 @@ async def predict_id(req: Request,
         if type == 'image' or type is None:
             if data.paths is not None:
                 if len(data.paths) > 0:
-                    return ocr.ocr_paths(data.paths)
+                    res = ocr.ocr_paths(data.paths)
+                    logger.error(
+                        "ip: " + req.client.host + ' port: ' + str(req.client.port) + ' ' + str(data) + ' type:' + str(
+                            type) + "result:" + str(res))
+                    return res
+
         if type == 'base64':
             if data.images is not None:
                 if len(data.images) > 0:
-                    return ocr.ocr_base64(data.images)
-    return {'code': 404, 'message': "data数据缺失", 'data': data, 'type': type}
+                    res = ocr.ocr_base64(data.images)
+                    logger.error(
+                        "ip: " + req.client.host + ' port: ' + str(req.client.port) + ' ' + str(data) + ' type:' + str(
+                            type) + "result:" + str(res))
+                    return res
+    res = {'code': 404, 'message': "data数据缺失", 'data': data, 'type': type}
+    logger.error(
+        "ip: " + req.client.host + ' port: ' + str(req.client.port) + ' ' + str(data) + ' type:' + str(
+            type) + "result:" + str(res))
+    return res

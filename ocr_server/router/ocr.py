@@ -35,7 +35,7 @@ class OCRsystem():
         results = []
         for img_path_url in paths:
             try:
-                image = np.asarray(Image.open(requests.get(img_path_url, stream=True).raw).convert('RGB'))
+                image = np.asarray(Image.open(requests.get(img_path_url, stream=True, timeout=100).raw).convert('RGB'))
                 starttime = time.time()
                 result = self.model.ocr(image)
                 elapse = time.time() - starttime
@@ -54,6 +54,7 @@ class OCRsystem():
                 temp = result2.copy()
                 temp['error'] = str(e)
                 logger.error(temp)
+        logger.info(results)
         return {'code': 200, 'message': "成功", 'results': results, 'elapse': time.time() - st}
 
     def ocr_base64(self, images: List):
@@ -81,6 +82,7 @@ class OCRsystem():
                 temp['error'] = str(e)
                 temp['img'] = img
                 logger.error(temp)
+        logger.info(results)
         return {'code': 200, 'message': "成功", 'results': results, 'elapse': time.time() - st}
 
     def ocr_pdf(self, pdf_path: List[str]):
@@ -91,7 +93,7 @@ class OCRsystem():
             starttime = time.time()
             if path.startswith('http'):
                 try:
-                    resp = requests.get(path)
+                    resp = requests.get(path, timeout=100)
                     doc = fitz.Document(stream=resp.content, filetype='pdf')
                 except Exception as e:
                     doc = {'msg': '文件下载失败', 'path': path}
@@ -122,6 +124,7 @@ class OCRsystem():
                        }
             results.append(result2)
             logger.info(result2)
+        logger.info(results)
         return {'code': 200, 'message': "成功", 'results': results, 'elapse': time.time() - st}
 
 
@@ -138,20 +141,36 @@ async def predict_ocr(req: Request,
                       data: Data = Body(None, description="传入 路径(paths) 或 base64图片(images)"),
                       type: str = Body(None),
                       ):
-    logger.info("ip: " + req.client.host + ' port: ' + str(req.client.port) + ' ' + str(data) + ' type:' + type)
+    logger.info("ip: " + req.client.host + ' port: ' + str(req.client.port) + ' ' + str(data) + ' type:' + str(type))
     ocr = OCRsystem()
     if data is not None:
         if type == 'image' or type is None:
             if data.paths is not None:
                 if len(data.paths) > 0:
-                    return ocr.ocr_paths(data.paths)
+                    res = ocr.ocr_paths(data.paths)
+                    logger.error(
+                        "ip: " + req.client.host + ' port: ' + str(req.client.port) + ' ' + str(data) + ' type:' + str(
+                            type) + "result:" + str(res))
+                    return res
         if type == 'base64':
             if data.images is not None:
                 if len(data.images) > 0:
-                    return ocr.ocr_base64(data.images)
+                    res = ocr.ocr_base64(data.images)
+                    logger.error(
+                        "ip: " + req.client.host + ' port: ' + str(req.client.port) + ' ' + str(data) + ' type:' + str(
+                            type) + "result:" + str(res))
+                    return res
+
         if type == 'pdf':
             if data.paths is not None:
                 if len(data.paths) > 0:
-                    return ocr.ocr_pdf(data.paths)
-        # raise HTTPException(status_code=404, detail={'code': 404, 'message': "POST数据缺失"})
-    return {'code': 404, 'message': "data数据缺失", 'data': data, 'type': type}
+                    res = ocr.ocr_pdf(data.paths)
+                    logger.error(
+                        "ip: " + req.client.host + ' port: ' + str(req.client.port) + ' ' + str(data) + ' type:' + str(
+                            type) + "result:" + str(res))
+                    return res
+    res = {'code': 404, 'message': "data数据缺失", 'data': data, 'type': type}
+    logger.error(
+        "ip: " + req.client.host + ' port: ' + str(req.client.port) + ' ' + str(data) + ' type:' + str(
+            type) + "result:" + str(res))
+    return res
