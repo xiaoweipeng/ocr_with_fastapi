@@ -5,7 +5,7 @@
 自动配置环境启动supervisor:
 
 ``` shell
-sudo bash start.sh
+sudo bash mave_venv.sh
 ```
 
 启动命令:
@@ -21,7 +21,7 @@ uvicorn ocr_server.main:app --host 0.0.0.0 --port 8002
 gunicorn -k uvicorn.workers.UvicornWorker ocr_server.main:app --bind 0.0.0.0:8002 --timeout 3000
 ```
 
-使用supervisor保护gunicorn进程:
+使用supervisor保护gunicorn进程,centos和ubuntu安装命令不同,文件夹不同,supervisor.conf里需要修改[include]把ini改成conf:
 
 ```shell
 apt install supervisor
@@ -82,6 +82,7 @@ json格式
 
 因为项目使用了pymupdf,会被AGPL污染,如果介意,可以使用其他pdf处理库
 
+paddleocr需要注意版本,2.5.0.2版本使用server的推理库有问题,需要降级
 <h4>感谢</h4>
 https://github.com/Biel-Hammer/IDCard-OCR-Paddle 项目提供身份证数据处理功能
 
