@@ -1,18 +1,22 @@
+from cgitb import reset
+import imp
 import os
 import re
 import string
 import time
 from typing import Optional, List
-
+from PIL import Image
+import cv2
+from io import BytesIO
+import paddlehub as hub
 import numpy as np
 import requests
-from PIL import Image
 from fastapi import APIRouter, Body, Request
 from loguru import logger
 from paddleocr import PaddleOCR
 from paddleocr.tools.infer.utility import base64_to_cv2
 from pydantic import BaseModel
-
+import base64
 router = APIRouter()
 
 
@@ -23,9 +27,11 @@ class IdCardStraight:
 
     def __init__(self, result):
         self.result = [
-            i.replace(" ", "").translate(str.maketrans("", "", string.punctuation))
+            i.replace(" ", "").translate(str.maketrans("", "", r"""!"#$%&'()*+,/:;<=>?@[\]^_`{|}~"""))
             for i in result
         ]
+        print(self.result)
+
         self.out = {"Data": {"Result": {}}}
         self.res = self.out["Data"]["Result"]
         self.res["Name"] = ""
@@ -34,7 +40,11 @@ class IdCardStraight:
         self.res["Gender"] = ""
         self.res["Nationality"] = ""
         self.res["Birth"] = ""
+        self.res["Sign"] = ""
+        self.res["Expire"] = ""
+        self.res["Header"] = ""
         self.res['isFront'] = True
+        
 
     def is_front(self):
         for txt in self.result:
@@ -118,6 +128,51 @@ class IdCardStraight:
                         #     self.res["Name"] = result[0]
                         #     break
 
+    def sign_part(self):
+            #签发机关金华市公安局婺城分局
+            for i in range(len(self.result)):
+                txt = self.result[i]
+                if ("签发" in txt or "签发机关" in txt) and len(txt) > 2:
+                    res = re.findall("机关[\u4e00-\u9fa5]+", txt)
+                    if len(res) > 0:
+                        self.res["Sign"] = res[0].split("机关")[-1]
+                if self.res["Sign"] == "":
+                    if (
+                            "签发" not in txt
+                            and "机关" not in txt
+                            and "民族" not in txt
+                            and "有效" not in txt
+                            and "身份证" not in txt
+                            and "-" not in txt
+                            and "共和国" not in txt
+                    ):
+                        self.res["Sign"] = self.result[i]
+    def exipre_date(self):
+            #有效期限2005.08.17-2025.08.17
+        for i in range(len(self.result)):
+            txt = self.result[i]
+                #先判断是否为长期
+            res = re.findall("\d+\.\d+\.\d+\-长期", txt)
+            if len(res) > 0:
+                self.res["Expire"] = res[0].split("期限")[-1]
+                break
+            res = re.findall("\d+\.\d+\.\d+\-\d+\.\d+\.\d+", txt)
+            print(res)
+            #直接用正则匹配\d+\.\d+\.\d+\-\d+\.\d+\.\d+
+            l = len(res)
+            if l > 0 or "期限" in txt:
+                if l :
+                    self.res["Expire"] = res[0].split("期限")[-1]
+                else :
+                    self.res["Expire"] = txt.split("期限")[-1]
+                if self.res['Expire'] != "" and "长" in self.res['Expire']:
+                    self.res["Expire"] = self.res["Expire"].split("长")[0] + "-长期"
+
+
+                    
+
+
+                
     def national(self):
         # 性别女民族汉
         for i in range(len(self.result)):
@@ -143,6 +198,8 @@ class IdCardStraight:
             if (
                     "住址" in txt
                     or "址" in txt
+                    or "盟" in txt
+                    or "旗" in txt
                     or "省" in txt
                     or "市" in txt
                     or "县" in txt
@@ -175,9 +232,9 @@ class IdCardStraight:
             self.full_name()
             self.national()
             self.address()
-            for key, value in self.res.items():
-                if value == "":
-                    self.out['error'] = '信息读取不全,重新上传照片'
+        else:
+            self.exipre_date()
+            self.sign_part()
         return self.out
 
 
@@ -192,11 +249,12 @@ class id_OCRsystem():
                                enable_mkldnn=True,
                                show_log=False)
         # self.model=PaddleOCR(use_angle_cls=True, lang='ch')
+        self.eps = hub.Module(name='ID_Photo_GEN')
 
-    def do_ocr(self, img):
+    def do_ocr(self, img ,size = [] ,last = False ,front = True):
+
         # 先找出身份证的文字,得到识别框位置
         boxs = self.model.ocr(img, det=True, cls=False, rec=False)
-
         # 分割身份证
         def imagecrop(img, box):
             xs = [x[1] for x in box]
@@ -212,29 +270,51 @@ class id_OCRsystem():
         logger.info(directions)
         if '180' in directions:
             temp = set(directions)
+            #todo ocr倒置
             if len(temp) != 1:
-                return {'error': '身份证图片不规范'}
+                if last :
+                    return {'error': '身份证图片不规范'}
+                else:
+                    result = [list(row) for row in zip(*img)]#将arr转置
+                    result = [row[::-1] for row in result]#将result逆转
+                    result = np.array(result)
+                    return self.do_ocr(result,size,True,front)
             else:
                 # 180度旋转图片,先上下翻转再左右翻转
                 img = img[::-1, ...][:, ::-1]
         # 没有倒置字,继续处理
+
+
+        #提取头像
         result = self.model.ocr(img, det=True, cls=False, rec=True)
-        logger.info(f'图片{str(hash(img.data.tobytes()))}ocr结果{result}')
+        #Image.fromarray(img).save('11.jpg', format="JPEG")
+        #logger.info(f'图片{str(hash(img.data.tobytes()))}ocr结果{result}')
         txts = [line[1][0] for line in result]
         result = IdCardStraight(txts).run()
-        logger.info(f'图片{str(hash(img.data.tobytes()))}身份证处理结果{result}')
+        if front : 
+            try :
+                photos = self.eps.Photo_GEN(images=[img])
+                buffered = BytesIO()
+                Image.fromarray(np.uint8(photos[0]['write'])).save(buffered, format="JPEG")
+                img_str = base64.b64encode(buffered.getvalue())
+                result['Data']['Result']['Header'] = str(img_str, encoding='utf-8')
+            except Exception as e:
+                return {'error': str(e)}
+        #
+        #logger.info(f'图片{str(hash(img.data.tobytes()))}身份证处理结果{result}')
         return result
 
-    def ocr_paths(self, paths: List):
+    def ocr_paths(self, paths: List,front = True):
         if len(paths) == 0:
             return {'code': 200, 'message': "失败", 'results': "图片路径为空"}
         st = time.time()
         results = []
         for img_path_url in paths:
             try:
-                image = np.asarray(Image.open(requests.get(img_path_url, stream=True, timeout=100).raw).convert('RGB'))
+                img = Image.open(requests.get(img_path_url, stream=True, timeout=100).raw).convert('RGB')
+                image = np.asarray(img)
                 starttime = time.time()
-                result = self.do_ocr(image)
+                result = self.do_ocr(image,img.size,False ,front)
                 elapse = time.time() - starttime
                 if 'error' in result:
                     result2 = {'msg': result['error'],
@@ -249,7 +329,7 @@ class id_OCRsystem():
                                'hash': str(hash(image.data.tobytes()))
                                }
                 results.append(result2)
-                logger.info(result2)
+                #logger.info(result2)
             except Exception as e:
                 result2 = {'msg': '图片不存在',
                            'path': img_path_url,
@@ -257,8 +337,8 @@ class id_OCRsystem():
                 results.append(result2)
                 temp = result2.copy()
                 temp['error'] = str(e)
-                logger.error(temp)
-        logger.info(results)
+                logger.error('错误信息=' + temp['error'])
+        #logger.info(results)
         return {'code': 200, 'message': "成功", 'results': results, 'elapse': time.time() - st}
 
     def ocr_base64(self, images: List):
@@ -305,6 +385,7 @@ class Data(BaseModel):
 async def predict_id(req: Request,
                      data: Data = Body(None, description="传入 路径(paths) 或 base64图片(images)"),
                      type: str = Body(None),
+                     is_front: bool = Body(None),
                      ):
     logger.info("ip: " + req.client.host + ' port: ' + str(req.client.port) + ' ' + str(data) + ' type:' + type)
     ocr = id_OCRsystem()
@@ -312,10 +393,10 @@ async def predict_id(req: Request,
         if type == 'image' or type is None:
             if data.paths is not None:
                 if len(data.paths) > 0:
-                    res = ocr.ocr_paths(data.paths)
-                    logger.error(
-                        "ip: " + req.client.host + ' port: ' + str(req.client.port) + ' ' + str(data) + ' type:' + str(
-                            type) + "result:" + str(res))
+                    res = ocr.ocr_paths(data.paths,is_front)
+                    #logger.error(
+                    #    "ip: " + req.client.host + ' port: ' + str(req.client.port) + ' ' + str(data) + ' type:' + str(
+                    #        type) + "result:" + str(res))
                     return res
 
         if type == 'base64':
@@ -327,7 +408,5 @@ async def predict_id(req: Request,
                             type) + "result:" + str(res))
                     return res
     res = {'code': 404, 'message': "data数据缺失", 'data': data, 'type': type}
-    logger.error(
-        "ip: " + req.client.host + ' port: ' + str(req.client.port) + ' ' + str(data) + ' type:' + str(
-            type) + "result:" + str(res))
+    
     return res
